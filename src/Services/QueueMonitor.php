@@ -117,6 +117,9 @@ class QueueMonitor
 
         $model = self::getModel();
 
+        /**
+         * @var \romanzipp\QueueMonitor\Models\Contracts\MonitorContract $monitor
+         */
         $monitor = $model::query()->create([
             'job_id' => $jobId = self::getJobId($job),
             'name' => $job->resolveName(),
@@ -127,7 +130,7 @@ class QueueMonitor
         ]);
 
         $model::query()
-            ->where('id', '!=', $monitor)
+            ->where('id', '!=', $monitor->id)
             ->where('job_id', $jobId)
             ->where('failed', false)
             ->whereNull('finished_at')
