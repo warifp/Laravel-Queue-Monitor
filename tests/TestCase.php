@@ -2,15 +2,17 @@
 
 namespace romanzipp\QueueMonitor\Tests;
 
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Orchestra\Testbench\TestCase as BaseTestCase;
+use Orchestra\Testbench\Concerns\CreatesApplication;
 use romanzipp\QueueMonitor\Providers\QueueMonitorProvider;
 use romanzipp\QueueMonitor\Tests\Support\BaseJob;
 
-class TestCase extends BaseTestCase
+class TestCase extends \Illuminate\Foundation\Testing\TestCase
 {
     use RefreshDatabase;
+    use CreatesApplication;
 
     public function setUp(): void
     {
@@ -20,24 +22,20 @@ class TestCase extends BaseTestCase
         $this->withoutExceptionHandling();
     }
 
-    protected function defineDatabaseMigrations()
+    protected function refreshTestDatabase()
     {
-        try {
-            $this->artisan('queue:table');
-        } catch (\InvalidArgumentException $exception) {
-        }
+        rescue(fn () => $this->artisan('queue:table'));
+        rescue(fn () => $this->artisan('queue:failed-table'));
 
-        try {
-            $this->artisan('queue:failed-table');
-        } catch (\InvalidArgumentException $exception) {
-        }
-
-        $this->loadMigrationsFrom(__DIR__ . '/../migrations');
+        parent::refreshTestDatabase();
     }
 
     protected function dispatch(BaseJob $job): self
     {
-        dispatch($job);
+        app(Dispatcher::class)->dispatch($job);
+        // dispatch($job);
+
+        $this->assertQueueSize(1);
 
         return $this;
     }
@@ -52,9 +50,22 @@ class TestCase extends BaseTestCase
         return $this;
     }
 
+    protected function assertQueueSize(int $size): self
+    {
+        self::assertSame($size, $this->app['queue']->connection()->size());
+
+        return $this;
+    }
+
     protected function workQueue(): void
     {
-        $this->artisan('queue:work --once --sleep 1');
+        $job = $this->app['queue']->connection($this->app['config']['queue.default']);
+
+        if (null === $job) {
+            self::fail('No job dispatched');
+        }
+
+        $this->artisan('queue:work --once');
     }
 
     protected function getPackageProviders($app)
